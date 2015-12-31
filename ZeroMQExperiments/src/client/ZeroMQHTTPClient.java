@@ -1,5 +1,6 @@
 package client;
 
+import org.json.simple.JSONObject;
 import org.zeromq.ZContext;
 import org.zeromq.ZFrame;
 import org.zeromq.ZMQ;
@@ -132,19 +133,19 @@ public class ZeroMQHTTPClient {
 			// variable for instrumentation
 			long startTime;
 
+			// create a request
+			JSONObject obj = new JSONObject();
+			obj.put("method", "POST");
+			obj.put("uri", SERVER_ENDPOINT);
+			String request = obj.toJSONString();
+
 			for (int requestNbr = 0; requestNbr < SAMPLE_SIZE; requestNbr++) {
 				// +++++ start instrumentation
 				startTime = System.nanoTime();
 				// send request
-				UUID id = UUID.randomUUID();
-				String req = String
-						.format("J{'id' : '%s', 'method' : 'POST', 'uri' : '%s', 'body' : 'request#%d'}",
-								id, SERVER_ENDPOINT, requestNbr);
+				client.send("J" + request);
 
-				client.send(req);
-
-				// get the reply
-				// client.recv(0);
+				// count it as a transaction
 				transactionCount++;
 				mrts.add(System.nanoTime() - startTime);
 				// +++++ end instrumentation

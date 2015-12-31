@@ -27,13 +27,12 @@ public class HTTPServer extends AbstractHandler {
 	public void handle(String target, Request baseRequest,
 			HttpServletRequest request, HttpServletResponse response)
 			throws IOException, ServletException {
-		
-		//handle POST requets
+
+		// handle POST requets
 		if (request.getMethod().equalsIgnoreCase("post")) {
-			System.out.println("Request received");
 			// response is ok
 			response.setStatus(HttpServletResponse.SC_OK);
-			baseRequest.setHandled(true);			
+			baseRequest.setHandled(true);
 		}
 
 	}
