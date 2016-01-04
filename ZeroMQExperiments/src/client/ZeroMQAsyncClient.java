@@ -1,5 +1,6 @@
 package client;
 
+import org.json.simple.JSONObject;
 import org.zeromq.ZContext;
 import org.zeromq.ZFrame;
 import org.zeromq.ZMQ;
@@ -45,7 +46,6 @@ public class ZeroMQAsyncClient {
 	/**
 	 * an arraylist holding response time samplesp
 	 */
-	private static volatile ArrayList<Long> mrts = new ArrayList<Long>();
 	private static volatile boolean[] clientFinished = new boolean[KMaxThread];
 
 	/**
@@ -123,20 +123,24 @@ public class ZeroMQAsyncClient {
 
 			System.out.println("Client#" + clientID + " started...");
 
-			// variable for instrumentation
-			long startTime;
+			// create the request json
+			JSONObject obj = new JSONObject();
+			obj.put("id", "telecell");
+			obj.put("type", "telecell");
+			obj.put("isPattern", false);
+			obj.put("att", "value");
 
 			for (int requestNbr = 0; requestNbr < SAMPLE_SIZE; requestNbr++) {
-				// +++++ start instrumentation
-				startTime = System.nanoTime();
-				// send request
-				client.send(String.format("request #%d", requestNbr));
+				// send a request
+				obj.put("id", "telecell" + requestNbr);
+				obj.put("att", "value" + requestNbr);
+				client.send(obj.toString());
 
 				// get the reply
-				// client.recv(0);
+				byte[] reply = client.recv(0);
+
+				// count the transaction
 				transactionCount++;
-				mrts.add(System.nanoTime() - startTime);
-				// +++++ end instrumentation
 			}
 			System.out.println("Client#" + clientID + " finished...");
 			clientFinished[clientID] = true;
@@ -158,15 +162,13 @@ public class ZeroMQAsyncClient {
 		// call TPS calculator every second
 		Timer timer = new Timer();
 		timer.schedule(new TPSCalculator(), 1000, 1000);
-		
+
 		// run clients
 		for (int threadNbr = 0; threadNbr < KMaxThread; threadNbr++) {
 			clientFinished[threadNbr] = false;
 			new Thread(new ClientTask(threadNbr)).start();
 		}
 
-
-		
 		// wait untill all the clients are finished
 		boolean allClientsFinished;
 		do {

@@ -4,11 +4,14 @@
 package client;
 
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
+
+import org.json.simple.JSONObject;
 
 /**
  * @author saeed
@@ -127,21 +130,41 @@ public class HTTPClient {
 			this.clientID = id;
 		}
 
+		/*
+		 * (non-Javadoc)
+		 * 
+		 * @see java.lang.Runnable#run()
+		 */
 		public void run() {
 			System.out.println("Client#" + clientID + " started...");
+			// request
+			JSONObject obj = new JSONObject();
+			obj.put("id", "telecell");
+			obj.put("type", "telecell");
+			obj.put("isPattern", false);
+			obj.put("att", "value");
 
 			// send requests
 			for (int requestNbr = 0; requestNbr < SAMPLE_SIZE; requestNbr++) {
 				try {
-					URL obj = new URL(SERVER_ENDPOINT);
+					URL url = new URL(SERVER_ENDPOINT);
 
-					java.net.HttpURLConnection con = (java.net.HttpURLConnection) obj
+					java.net.HttpURLConnection con = (java.net.HttpURLConnection) url
 							.openConnection();
 
 					// add reuqest header
 					con.setRequestMethod("POST");
+					con.setRequestProperty("Content-Type", "application/json");
+					con.setRequestProperty("charset", "utf-8");
+					con.setDoOutput(true);
+					con.setUseCaches(false);
 
 					// Send post request
+					obj.put("id", "telecell" + requestNbr);
+					obj.put("att", "value" + requestNbr);
+					OutputStreamWriter wr = new OutputStreamWriter(
+							con.getOutputStream());
+					wr.write(obj.toString());
 
 					int responseCode = con.getResponseCode();
 

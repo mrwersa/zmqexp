@@ -17,7 +17,7 @@ import java.util.Random;
 //it easier to start and stop the example. Each task has its own
 //context and conceptually acts as a separate process.
 
-public class ZeroMQServer {
+public class ZeroMQAsyncServer {
 
 	/**
 	 * 
@@ -101,7 +101,7 @@ public class ZeroMQServer {
 	 */
 	public static void main(String[] args) throws Exception {
 		// output version
-		System.out.println(String.format("0MQ %s", ZMQ.getVersionString()));
+		System.out.println(String.format("Async Server: 0MQ %s", ZMQ.getVersionString()));
 
 		// start the server
 		new Thread(new server_task()).start();

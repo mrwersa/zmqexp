@@ -1,33 +1,19 @@
 package client;
 
 import org.json.simple.JSONObject;
-import org.zeromq.ZContext;
-import org.zeromq.ZFrame;
 import org.zeromq.ZMQ;
-import org.zeromq.ZMQ.PollItem;
-import org.zeromq.ZMQ.Socket;
-import org.zeromq.ZMsg;
-import org.zeromq.ZMQ.Poller;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Random;
-
 import java.util.ArrayList;
 
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.UUID;
 
 /**
  * @author saeed
  * 
- *         Asynchronous client-to-server (DEALER to ROUTER)
- * 
- *         While this example runs in a single process, that is just to make it
- *         easier to start and stop the example. Each task has its own context
- *         and conceptually acts as a separate process.
  */
 public class ZeroMQHTTPClient {
 	/**
@@ -38,11 +24,7 @@ public class ZeroMQHTTPClient {
 	/**
 	 * 
 	 */
-	private static final int SAMPLE_SIZE = 50000;
-	/**
-	 * maximum number of client worker threads
-	 */
-	private static final int KMaxThread = 1;
+	private static final int SAMPLE_SIZE = 100000;
 	/**
 	 * number of transactions
 	 */
@@ -52,12 +34,6 @@ public class ZeroMQHTTPClient {
 	 * an arraylist holding tps samples
 	 */
 	private static volatile ArrayList<Long> tpss = new ArrayList<Long>();
-
-	/**
-	 * an arraylist holding response time samplesp
-	 */
-	private static volatile ArrayList<Long> mrts = new ArrayList<Long>();
-	private static volatile boolean[] clientFinished = new boolean[KMaxThread];
 
 	/**
 	 * 
@@ -132,65 +108,8 @@ public class ZeroMQHTTPClient {
 		return sum;
 	}
 
-	private static Random rand = new Random(System.nanoTime());
-
-	/**
-	 * @author saeed
-	 * 
-	 *         This is our client task It connects to the server, and then sends
-	 *         a request once per second It collects responses as they arrive,
-	 *         and it prints them out. We will run several client tasks in
-	 *         parallel, each with a different random ID.
-	 */
-	private static class ClientTask implements Runnable {
-		private int clientID;
-
-		public ClientTask(int id) {
-			clientID = id;
-		}
-
-		public void run() {
-			ZContext ctx = new ZContext();
-
-			// Socket to send messages to zurl
-			Socket client = ctx.createSocket(ZMQ.PUSH);
-			// connect to zurl
-			client.connect("ipc:///tmp/zurl-in");
-
-			System.out.println("Client#" + clientID + " started...");
-
-			// variable for instrumentation
-			long startTime;
-
-			// create a request
-			JSONObject obj = new JSONObject();
-			obj.put("method", "POST");
-			obj.put("uri", SERVER_ENDPOINT);
-			String request = obj.toJSONString();
-
-			for (int requestNbr = 0; requestNbr < SAMPLE_SIZE; requestNbr++) {
-				// +++++ start instrumentation
-				startTime = System.nanoTime();
-				// send request
-				client.send("J" + request);
-
-				// count it as a transaction
-				transactionCount++;
-				mrts.add(System.nanoTime() - startTime);
-				// +++++ end instrumentation
-			}
-			System.out.println("Client#" + clientID + " finished...");
-			clientFinished[clientID] = true;
-			ctx.destroy();
-		}
-	}
-
 	/**
 	 * @param args
-	 * @throws Exception
-	 * 
-	 *             The main thread simply starts several clients, and a server,
-	 *             and then waits for the server to finish
 	 */
 	public static void main(String[] args) {
 		// output version
@@ -203,39 +122,47 @@ public class ZeroMQHTTPClient {
 		Timer timer = new Timer();
 		timer.schedule(new TPSCalculator(), 1000, 1000);
 
-		// run clients
-		for (int threadNbr = 0; threadNbr < KMaxThread; threadNbr++) {
-			clientFinished[threadNbr] = false;
-			new Thread(new ClientTask(threadNbr)).start();
+		ZMQ.Context context = ZMQ.context(1);
+		// Socket to talk to server
+		ZMQ.Socket requester = context.socket(ZMQ.PUSH);
+		requester.connect("ipc:///tmp/zurl-in");
+
+		// create the request json
+		JSONObject obj = new JSONObject();
+		obj.put("method", "POST");
+		obj.put("uri", SERVER_ENDPOINT);
+
+		JSONObject data = new JSONObject();
+		data.put("id", "telecell");
+		data.put("type", "telecell");
+		data.put("isPattern", false);
+		data.put("att", "value");
+
+		obj.put("data", data);
+
+		for (int requestNbr = 0; requestNbr != SAMPLE_SIZE; requestNbr++) {
+			// send a request
+			data.put("id", "telecell" + requestNbr);
+			data.put("att", "value" + requestNbr);
+			obj.put("data", data);
+
+			requester.send("J" + obj.toString());
+
+			// count the transaction
+			transactionCount++;
 		}
-
-		// wait untill all the clients are finished
-		boolean allClientsFinished;
-		do {
-			try {
-				Thread.sleep(100);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-
-			allClientsFinished = true;
-			for (int i = 0; i < KMaxThread; i++) {
-				if (!clientFinished[i]) {
-					allClientsFinished = false;
-					break;
-				}
-			}
-
-		} while (!allClientsFinished);
-
-		// stop the timer on the server
-		// shuffleServerTimer();
 
 		// stop the timer
 		timer.cancel();
 
+		// stop the timer on the server
+		// shuffleServerTimer();
+
 		// printout results
 		printResults();
+
+		requester.close();
+		context.term();
 	}
+
 }

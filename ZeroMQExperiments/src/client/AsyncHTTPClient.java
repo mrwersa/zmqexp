@@ -2,12 +2,15 @@ package client;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStreamWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+
+import org.json.simple.JSONObject;
 
 import com.mashape.unirest.http.HttpResponse;
 import com.mashape.unirest.http.JsonNode;
@@ -19,11 +22,8 @@ public class AsyncHTTPClient {
 	/**
 	 * 
 	 */
-	private static final String SERVER_ENDPOINT = "http://localhost:8080";
-	/**
-	 * maximum number of client worker threads
-	 */
-	private static final int KMaxThread = 1;
+	private static final String SERVER_ENDPOINT = "http://127.0.0.1:8080";
+
 	/**
 	 * number of requests to be sent to the server by each client worker
 	 */
@@ -38,11 +38,6 @@ public class AsyncHTTPClient {
 	 * an arraylist holding tps samples
 	 */
 	private static volatile ArrayList<Long> tpss = new ArrayList<Long>();
-
-	/**
-	 * an arraylist holding response time samplesp
-	 */
-	private static volatile ArrayList<Long> mrts = new ArrayList<Long>();
 
 	/**
 	 * 
@@ -91,13 +86,10 @@ public class AsyncHTTPClient {
 	private static void printResults() {
 		// calculate mean TPS
 		double tps = calculateAverage(tpss);
-		// calculate mean response time (milliseconds)
-		double mrt = calculateAverage(mrts) / 1000;
 
 		// print out
 		System.out.println("======================");
 		System.out.format("TPS: %.2f%n", tps);
-		System.out.format("Mean Response Time: %.2fms%n", mrt);
 		System.out.println("======================");
 	}
 
@@ -122,45 +114,58 @@ public class AsyncHTTPClient {
 	 */
 	public static void main(String[] args) {
 		// start the timer on the server
-		// shuffleServerTimer();
+		shuffleServerTimer();
 
 		// call TPS calculator every second
 		Timer timer = new Timer();
-		timer.schedule(new TPSCalculator(), 0, 1000);
+		timer.schedule(new TPSCalculator(), 1000, 1000);
 
-		// make POST requests
-		for (int i = 0; i < SAMPLE_SIZE * KMaxThread; i++) {
-			Unirest.post(SERVER_ENDPOINT).asStringAsync(new Callback<String>() {
+		// request
+		JSONObject obj = new JSONObject();
+		obj.put("id", "telecell");
+		obj.put("type", "telecell");
+		obj.put("isPattern", false);
+		obj.put("att", "value");
 
-				@Override
-				public void cancelled() {
-					// TODO Auto-generated method stub
+		// send requests
+		for (int requestNbr = 0; requestNbr < SAMPLE_SIZE; requestNbr++) {
+			try {
+				URL url = new URL(SERVER_ENDPOINT);
 
+				java.net.HttpURLConnection con = (java.net.HttpURLConnection) url
+						.openConnection();
+
+				// add reuqest header
+				con.setRequestMethod("POST");
+				con.setRequestProperty("Content-Type", "application/json");
+				con.setRequestProperty("charset", "utf-8");
+				con.setDoOutput(true);
+				con.setUseCaches(false);
+
+				// Send post request
+				obj.put("id", "telecell" + requestNbr);
+				obj.put("att", "value" + requestNbr);
+				OutputStreamWriter wr = new OutputStreamWriter(
+						con.getOutputStream());
+				wr.write(obj.toString());
+
+				int responseCode = con.getResponseCode();
+
+				// count transaction
+				if (responseCode == 200) {
+					transactionCount++;
 				}
-
-				@Override
-				public void completed(HttpResponse<String> response) {
-					// TODO Auto-generated method stub
-					int code = response.getStatus();
-
-					if (code == 200) {
-						// count the transaction
-						transactionCount++;
-					}
-				}
-
-				@Override
-				public void failed(UnirestException arg0) {
-					// TODO Auto-generated method stub
-
-				}
-
-			});
-
+			} catch (MalformedURLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 
 		// stop the timer on the server
-		// shuffleServerTimer();
+		shuffleServerTimer();
 
 		// stop the timer
 		timer.cancel();
