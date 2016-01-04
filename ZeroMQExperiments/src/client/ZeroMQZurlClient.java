@@ -1,34 +1,30 @@
 package client;
 
+import org.json.simple.JSONObject;
+import org.zeromq.ZMQ;
+
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStreamWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Map;
+
 import java.util.Timer;
 import java.util.TimerTask;
 
-import org.json.simple.JSONObject;
-
-import com.mashape.unirest.http.HttpResponse;
-import com.mashape.unirest.http.JsonNode;
-import com.mashape.unirest.http.Unirest;
-import com.mashape.unirest.http.async.Callback;
-import com.mashape.unirest.http.exceptions.UnirestException;
-
-public class AsyncHTTPClient {
+/**
+ * @author saeed
+ * 
+ */
+public class ZeroMQZurlClient {
 	/**
 	 * 
 	 */
 	private static final String SERVER_ENDPOINT = "http://127.0.0.1:8080";
 
 	/**
-	 * number of requests to be sent to the server by each client worker
+	 * 
 	 */
-	private static final int SAMPLE_SIZE = 50000;
-
+	private static final int SAMPLE_SIZE = 100000;
 	/**
 	 * number of transactions
 	 */
@@ -81,15 +77,18 @@ public class AsyncHTTPClient {
 	}
 
 	/**
-	 * print the results (TPS)
+	 * 
 	 */
 	private static void printResults() {
 		// calculate mean TPS
 		double tps = calculateAverage(tpss);
+		// calculate mean response time (milliseconds)
+		// double mrt = calculateAverage(mrts) / 1000;
 
 		// print out
 		System.out.println("======================");
 		System.out.format("TPS: %.2f%n", tps);
+		// System.out.format("Mean Response Time: %.2fms%n", mrt);
 		System.out.println("======================");
 	}
 
@@ -113,6 +112,9 @@ public class AsyncHTTPClient {
 	 * @param args
 	 */
 	public static void main(String[] args) {
+		// output version
+		System.out.println(String.format("0MQ %s", ZMQ.getVersionString()));
+
 		// start the timer on the server
 		shuffleServerTimer();
 
@@ -120,58 +122,47 @@ public class AsyncHTTPClient {
 		Timer timer = new Timer();
 		timer.schedule(new TPSCalculator(), 1000, 1000);
 
-		// request
+		ZMQ.Context context = ZMQ.context(1);
+		// Socket to talk to server
+		ZMQ.Socket requester = context.socket(ZMQ.PUSH);
+		requester.connect("ipc:///tmp/zurl-in");
+
+		// create the request json
 		JSONObject obj = new JSONObject();
-		obj.put("id", "telecell");
-		obj.put("type", "telecell");
-		obj.put("isPattern", false);
-		obj.put("att", "value");
+		obj.put("method", "POST");
+		obj.put("uri", SERVER_ENDPOINT);
 
-		// send requests
-		for (int requestNbr = 0; requestNbr < SAMPLE_SIZE; requestNbr++) {
-			try {
-				URL url = new URL(SERVER_ENDPOINT);
+		JSONObject data = new JSONObject();
+		data.put("id", "telecell");
+		data.put("type", "telecell");
+		data.put("isPattern", false);
+		data.put("att", "value");
 
-				java.net.HttpURLConnection con = (java.net.HttpURLConnection) url
-						.openConnection();
+		obj.put("data", data);
 
-				// add reuqest header
-				con.setRequestMethod("POST");
-				con.setRequestProperty("Content-Type", "application/json");
-				con.setRequestProperty("charset", "utf-8");
-				con.setDoOutput(true);
-				con.setUseCaches(false);
+		for (int requestNbr = 0; requestNbr != SAMPLE_SIZE; requestNbr++) {
+			// send a request
+			data.put("id", "telecell" + requestNbr);
+			data.put("att", "value" + requestNbr);
+			obj.put("data", data);
 
-				// Send post request
-				obj.put("id", "telecell" + requestNbr);
-				obj.put("att", "value" + requestNbr);
-				OutputStreamWriter wr = new OutputStreamWriter(
-						con.getOutputStream());
-				wr.write(obj.toString());
+			requester.send("J" + obj.toString());
 
-				int responseCode = con.getResponseCode();
-
-				// count transaction
-				if (responseCode == 200) {
-					transactionCount++;
-				}
-			} catch (MalformedURLException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+			// count the transaction
+			transactionCount++;
 		}
-
-		// stop the timer on the server
-		shuffleServerTimer();
 
 		// stop the timer
 		timer.cancel();
 
+		// stop the timer on the server
+		// shuffleServerTimer();
+
 		// printout results
 		printResults();
 
+		requester.close();
+		context.term();
 	}
+
 }
