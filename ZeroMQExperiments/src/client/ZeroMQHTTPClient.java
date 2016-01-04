@@ -9,6 +9,9 @@ import org.zeromq.ZMQ.Socket;
 import org.zeromq.ZMsg;
 import org.zeromq.ZMQ.Poller;
 
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Random;
 
 import java.util.ArrayList;
@@ -30,7 +33,7 @@ public class ZeroMQHTTPClient {
 	/**
 	 * 
 	 */
-	private static final String SERVER_ENDPOINT = "http://localhost:8080";
+	private static final String SERVER_ENDPOINT = "http://127.0.0.1:8080";
 
 	/**
 	 * 
@@ -39,7 +42,7 @@ public class ZeroMQHTTPClient {
 	/**
 	 * maximum number of client worker threads
 	 */
-	private static final int KMaxThread = 10;
+	private static final int KMaxThread = 1;
 	/**
 	 * number of transactions
 	 */
@@ -55,6 +58,32 @@ public class ZeroMQHTTPClient {
 	 */
 	private static volatile ArrayList<Long> mrts = new ArrayList<Long>();
 	private static volatile boolean[] clientFinished = new boolean[KMaxThread];
+
+	/**
+	 * 
+	 */
+	private static void shuffleServerTimer() {
+		// send a PUT request to the server to start/stop the timer
+
+		try {
+			URL obj = new URL(SERVER_ENDPOINT);
+			java.net.HttpURLConnection con = (java.net.HttpURLConnection) obj
+					.openConnection();
+			// add request header
+			con.setRequestMethod("PUT");
+
+			// Send put request
+			con.getResponseCode();
+
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	}
 
 	/**
 	 * @author saeed
@@ -167,15 +196,18 @@ public class ZeroMQHTTPClient {
 		// output version
 		System.out.println(String.format("0MQ %s", ZMQ.getVersionString()));
 
+		// start the timer on the server
+		shuffleServerTimer();
+
+		// call TPS calculator every second
+		Timer timer = new Timer();
+		timer.schedule(new TPSCalculator(), 1000, 1000);
+
 		// run clients
 		for (int threadNbr = 0; threadNbr < KMaxThread; threadNbr++) {
 			clientFinished[threadNbr] = false;
 			new Thread(new ClientTask(threadNbr)).start();
 		}
-
-		// call TPS calculator every second
-		Timer timer = new Timer();
-		timer.schedule(new TPSCalculator(), 0, 1000);
 
 		// wait untill all the clients are finished
 		boolean allClientsFinished;
@@ -196,6 +228,9 @@ public class ZeroMQHTTPClient {
 			}
 
 		} while (!allClientsFinished);
+
+		// stop the timer on the server
+		// shuffleServerTimer();
 
 		// stop the timer
 		timer.cancel();

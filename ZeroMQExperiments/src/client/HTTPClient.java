@@ -22,7 +22,7 @@ public class HTTPClient {
 	/**
 	 * maximum number of client worker threads
 	 */
-	private static final int KMaxThread = 5;
+	private static final int KMaxThread = 1;
 	/**
 	 * number of requests to be sent to the server by each client worker
 	 */
@@ -43,6 +43,32 @@ public class HTTPClient {
 	 */
 	private static volatile ArrayList<Long> mrts = new ArrayList<Long>();
 	private static volatile boolean[] clientFinished = new boolean[KMaxThread];
+
+	/**
+	 * 
+	 */
+	private static void shuffleServerTimer() {
+		// send a PUT request to the server to start/stop the timer
+
+		try {
+			URL obj = new URL(SERVER_ENDPOINT);
+			java.net.HttpURLConnection con = (java.net.HttpURLConnection) obj
+					.openConnection();
+			// add request header
+			con.setRequestMethod("PUT");
+
+			// Send put request
+			con.getResponseCode();
+
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	}
 
 	/**
 	 * @author saeed
@@ -141,15 +167,17 @@ public class HTTPClient {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		// TODO Auto-generated method stub
+		// start the timer on the server
+		shuffleServerTimer();
+
+		// call TPS calculator every second
+		Timer timer = new Timer();
+		timer.schedule(new TPSCalculator(), 1000, 1000);
+
 		for (int threadNbr = 0; threadNbr < KMaxThread; threadNbr++) {
 			clientFinished[threadNbr] = false;
 			new Thread(new Client(threadNbr)).start();
 		}
-
-		// call TPS calculator every second
-		Timer timer = new Timer();
-		timer.schedule(new TPSCalculator(), 0, 1000);
 
 		// wait untill all the clients are finished
 		boolean allClientsFinished;
@@ -170,6 +198,9 @@ public class HTTPClient {
 			}
 
 		} while (!allClientsFinished);
+
+		// stop the timer on the server
+		shuffleServerTimer();
 
 		// stop the timer
 		timer.cancel();

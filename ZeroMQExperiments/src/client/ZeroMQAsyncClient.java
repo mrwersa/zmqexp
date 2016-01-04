@@ -27,11 +27,11 @@ import java.util.UUID;
  */
 public class ZeroMQAsyncClient {
 
-	private static final int SAMPLE_SIZE = 50000;
+	private static final int SAMPLE_SIZE = 100000;
 	/**
 	 * maximum number of client worker threads
 	 */
-	private static final int KMaxThread = 10;
+	private static final int KMaxThread = 1;
 	/**
 	 * number of transactions
 	 */
@@ -155,16 +155,18 @@ public class ZeroMQAsyncClient {
 		// output version
 		System.out.println(String.format("0MQ %s", ZMQ.getVersionString()));
 
+		// call TPS calculator every second
+		Timer timer = new Timer();
+		timer.schedule(new TPSCalculator(), 1000, 1000);
+		
 		// run clients
 		for (int threadNbr = 0; threadNbr < KMaxThread; threadNbr++) {
 			clientFinished[threadNbr] = false;
 			new Thread(new ClientTask(threadNbr)).start();
 		}
 
-		// call TPS calculator every second
-		Timer timer = new Timer();
-		timer.schedule(new TPSCalculator(), 0, 1000);
 
+		
 		// wait untill all the clients are finished
 		boolean allClientsFinished;
 		do {
